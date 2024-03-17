@@ -1,96 +1,121 @@
 import tkinter as tk
 import tkinter.messagebox as messagebox
-from datetime import datetime
+import os
 
-class TodoApp:
-    def __init__(self, master):
-        self.master = master
-        master.title("To-Do List")
-        master.configure(bg='black')
-        self.tasks = {}
+class TicTacToe:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Tic-Tac-Toe")
 
-        self.task_entry = tk.Text(master, width=40, height=5, bg='black', fg='white')
-        self.task_entry.grid(row=0, column=0, padx=10, pady=10, columnspan=3)
+        self.player1_name = ""
+        self.player2_name = ""
+        self.current_player = "X"
+        self.board = [" " for _ in range(9)]
+        self.buttons = []
+        self.wins = {"Player 1": 0, "Player 2": 0}
 
-        self.date_label = tk.Label(master, text="Date (YYYY-MM-DD):", bg='black', fg='white')
-        self.date_label.grid(row=1, column=0, padx=5, pady=5)
-        self.date_entry = tk.Entry(master, width=15, bg='black', fg='white')
-        self.date_entry.grid(row=1, column=1, padx=5, pady=5)
-        self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))  # Set default date to current date
+        self.create_labels()
+        self.create_board()
+        self.load_leaderboard()  # Load leaderboard when the game starts
 
-        self.add_button = tk.Button(master, text="Add Tasks", command=self.add_tasks, bg='black', fg='white')
-        self.add_button.grid(row=1, column=2, padx=5, pady=5)
+    def create_labels(self):
+        tk.Label(self.root, text="Player 1 (X):").grid(row=0, column=0)
+        self.player1_entry = tk.Entry(self.root)
+        self.player1_entry.grid(row=0, column=1)
 
-        self.task_listbox = tk.Listbox(master, width=50, bg='black', fg='white')
-        self.task_listbox.grid(row=2, column=0, columnspan=2, padx=10, pady=5)
+        tk.Label(self.root, text="Player 2 (O):").grid(row=1, column=0)
+        self.player2_entry = tk.Entry(self.root)
+        self.player2_entry.grid(row=1, column=1)
 
-        self.complete_button = tk.Button(master, text="Mark as Complete", command=self.mark_as_complete, bg='black', fg='white')
-        self.complete_button.grid(row=2, column=2, padx=5, pady=5)
+        tk.Button(self.root, text="Start Game", command=self.start_game).grid(row=2, columnspan=2)
 
-        self.clear_button = tk.Button(master, text="Clear Tasks", command=self.clear_tasks, bg='black', fg='white')
-        self.clear_button.grid(row=3, column=0, padx=5, pady=5)
+        self.leaderboard_label = tk.Label(self.root, text="Leaderboard")
+        self.leaderboard_label.grid(row=3, columnspan=2)
 
-        self.save_button = tk.Button(master, text="Save Tasks", command=self.save_tasks, bg='black', fg='white')
-        self.save_button.grid(row=3, column=1, padx=5, pady=5)
+        self.update_labels()
 
-    def add_tasks(self):
-        tasks = self.task_entry.get("1.0", tk.END).splitlines()
-        date = self.date_entry.get()
-        if not all(tasks):
-            messagebox.showwarning("Warning", "Please enter tasks.")
-        else:
-            if date:
-                tasks_with_date = [f"{date}: {task}" for task in tasks]
-                if date not in self.tasks:
-                    self.tasks[date] = []
-                self.tasks[date].extend(tasks_with_date)  # Append new tasks to existing tasks for the date
-                self.update_task_listbox(date)  # Update the task listbox with the updated tasks
-                self.task_entry.delete("1.0", tk.END)
-                self.date_entry.delete(0, tk.END)
-                self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))  # Reset date to current date
+    def create_board(self):
+        for i in range(3):
+            for j in range(3):
+                button = tk.Button(self.root, text=" ", width=10, height=4,
+                                   command=lambda row=i, col=j: self.on_click(row, col))
+                button.grid(row=i+4, column=j)
+                self.buttons.append(button)
+
+    def start_game(self):
+        self.player1_name = self.player1_entry.get().strip()
+        self.player2_name = self.player2_entry.get().strip()
+
+        if not self.player1_name or not self.player2_name:
+            messagebox.showerror("Error", "Please enter both player names.")
+            return
+
+        self.reset_board()
+        self.update_labels()
+
+    def on_click(self, row, col):
+        index = 3 * row + col
+        if self.board[index] == " ":
+            self.board[index] = self.current_player
+            self.buttons[index].config(text=self.current_player)
+            if self.check_winner() or self.check_draw():
+                self.end_game()
             else:
-                messagebox.showwarning("Warning", "Please enter a date for the tasks.")
+                self.toggle_player()
 
-    def update_task_listbox(self, date):
-        if date in self.tasks:
-            self.task_listbox.delete(0, tk.END)
-            for task in self.tasks[date]:
-                self.task_listbox.insert(tk.END, task)
-        else:
-            messagebox.showwarning("Warning", f"No tasks found for {date}.")
+    def toggle_player(self):
+        self.current_player = "O" if self.current_player == "X" else "X"
+        self.update_labels()
 
-    def mark_as_complete(self):
-        selected_indices = self.task_listbox.curselection()
-        if selected_indices:
-            for index in selected_indices:
-                task = self.task_listbox.get(index)
-                if " [DONE]" not in task:
-                    self.task_listbox.delete(index)
-                    self.task_listbox.insert(index, task + " [DONE]")
+    def update_labels(self):
+        self.leaderboard_label.config(text=f"Leaderboard\n{self.player1_name}: {self.wins.get(self.player1_name, 0)} "
+                                            f"| {self.player2_name}: {self.wins.get(self.player2_name, 0)}\nCurrent Turn: {self.current_player}")
 
-    def clear_tasks(self):
-        date = self.date_entry.get()
-        if date:
-            if date in self.tasks:
-                del self.tasks[date]
-                self.task_listbox.delete(0, tk.END)
-                messagebox.showinfo("Information", f"Tasks for {date} cleared.")
-            else:
-                messagebox.showwarning("Warning", f"No tasks found for {date}.")
-        else:
-            messagebox.showwarning("Warning", "Please enter a date.")
+    def check_winner(self):
+        lines = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]]
+        for line in lines:
+            if self.board[line[0]] == self.board[line[1]] == self.board[line[2]] != " ":
+                winner = self.player1_name if self.board[line[0]] == "X" else self.player2_name
+                self.wins[winner] = self.wins.get(winner, 0) + 1
+                self.save_leaderboard()
+                messagebox.showinfo("Game Over", f"{winner} wins!")
+                self.load_leaderboard()  # Reload leaderboard data after a game ends
+                self.update_labels()  # Update labels after reloading leaderboard
+                return True
+        return False
 
-    def save_tasks(self):
-        filename = "tasks.txt"
-        with open(filename, "a") as file:  # Open file in append mode to append taskss
-            for date, tasks in self.tasks.items():
-                file.write(f"Date: {date}\n")
-                for task in tasks:
-                    file.write(f"{task}\n")
-                file.write("\n")
-        messagebox.showinfo("Information", f"Tasks saved to {filename}.")
+    def check_draw(self):
+        if " " not in self.board:
+            messagebox.showinfo("Game Over", "It's a draw!")
+            return True
+        return False
+
+    def end_game(self):
+        self.update_labels()
+        self.save_leaderboard()
+        self.load_leaderboard()  # Reload leaderboard data after a game ends
+
+    def reset_board(self):
+        self.current_player = "X"
+        self.board = [" " for _ in range(9)]
+        for button in self.buttons:
+            button.config(text=" ")
+
+    def load_leaderboard(self):
+        if os.path.exists("leaderboard.txt"):
+            with open("leaderboard.txt", "r") as file:
+                lines = file.readlines()
+                for line in lines:
+                    player, wins = line.strip().split(":")
+                    self.wins[player] = int(wins)
+            self.update_labels()  # Update the leaderboard labels after loading
+
+    def save_leaderboard(self):
+        with open("leaderboard.txt", "w") as file:
+            for player, wins in self.wins.items():
+                file.write(f"{player}:{wins}\n")
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = TodoApp(root)
+    game = TicTacToe(root)
     root.mainloop()
